@@ -6,12 +6,14 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 
 import com.cmcc.myclock.util.SizeUtil;
+
+import java.util.Calendar;
 
 public class CustomClock extends View {
 
@@ -48,28 +50,30 @@ public class CustomClock extends View {
             array = getContext().obtainStyledAttributes(attrs, R.styleable.CustomClock);
             mPadding = array.getDimension(R.styleable.CustomClock_cc_padding, DptoPx(10));
             mTextSize = array.getDimension(R.styleable.CustomClock_cc_text_size, SptoPx(16));
-            mHourPointWidth = array.getDimension(R.styleable.CustomClock_cc_hour_pointer_width, DptoPx(5));
-            mMinutePointWidth = array.getDimension(R.styleable.CustomClock_cc_minute_pointer_width, DptoPx(3));
-            mSecondPointWidth = array.getDimension(R.styleable.CustomClock_cc_second_pointer_width, DptoPx(2));
-            mPointRadius = (int) array.getDimension(R.styleable.CustomClock_cc_pointer_corner_radius, DptoPx(10));
+            mHourPointWidth = array.getDimension(R.styleable.CustomClock_cc_hour_pointer_width, DptoPx(10));
+            mMinutePointWidth = array.getDimension(R.styleable.CustomClock_cc_minute_pointer_width, DptoPx(6));
+            mSecondPointWidth = array.getDimension(R.styleable.CustomClock_cc_second_pointer_width, DptoPx(4));
+            mPointRadius = (int) array.getDimension(R.styleable.CustomClock_cc_pointer_corner_radius, DptoPx(20));
             mPointEndLength = array.getDimension(R.styleable.CustomClock_cc_pointer_end_length, DptoPx(10));
 
             mColorLong = array.getColor(R.styleable.CustomClock_cc_scale_long_color, Color.argb(225, 0, 0, 0));
             mColorShort = array.getColor(R.styleable.CustomClock_cc_scale_short_color, Color.argb(125, 0, 0, 0));
+            mHourPointColor = array.getColor(R.styleable.CustomClock_cc_hour_pointer_color, Color.BLACK);
             mMinutePointColor = array.getColor(R.styleable.CustomClock_cc_minute_pointer_color, Color.BLACK);
             mSecondPointColor = array.getColor(R.styleable.CustomClock_cc_second_pointer_color, Color.RED);
         } catch (Exception e) {
             //一旦出现错误全部使用默认值
             mPadding = DptoPx(10);
             mTextSize = SptoPx(16);
-            mHourPointWidth = DptoPx(5);
-            mMinutePointWidth = DptoPx(3);
-            mSecondPointWidth = DptoPx(2);
-            mPointRadius = (int) DptoPx(10);
+            mHourPointWidth = DptoPx(10);
+            mMinutePointWidth = DptoPx(6);
+            mSecondPointWidth = DptoPx(4);
+            mPointRadius = (int) DptoPx(20);
             mPointEndLength = DptoPx(10);
 
             mColorLong = Color.argb(225, 0, 0, 0);
             mColorShort = Color.argb(125, 0, 0, 0);
+            mHourPointColor = Color.BLACK;
             mMinutePointColor = Color.BLACK;
             mSecondPointColor = Color.RED;
         } finally {
@@ -93,8 +97,8 @@ public class CustomClock extends View {
 
     public void init() {
         mPaint = new Paint();
-        mPaint.setAntiAlias(true);
-        mPaint.setDither(true);
+        mPaint.setAntiAlias(true);  //抗锯齿
+        mPaint.setDither(true);     //防抖动
     }
 
     @Override
@@ -113,6 +117,7 @@ public class CustomClock extends View {
             getLayoutParams().height == ViewGroup.LayoutParams.WRAP_CONTENT) {
             setMeasuredDimension(mSize, mSize);
         } else {
+//           //默认大小为允许View最大值，大于此默认值无效
 //            if(widthMode == MeasureSpec.EXACTLY) {
 //                mSize = Math.min(mSize, widthSize);
 //            }
@@ -129,7 +134,7 @@ public class CustomClock extends View {
         super.onSizeChanged(w, h, oldw, oldh);
 
         mRadius = Math.min(w, h)/2 - mPadding;
-        mPointEndLength = mRadius/6;
+        mPointEndLength = mRadius/6;  //设置指针末尾过圆心的长度为1/6半径
     }
 
     @Override
@@ -139,10 +144,14 @@ public class CustomClock extends View {
         //将坐标原点移动至中心
         canvas.save();
         canvas.translate(getWidth()/2, getHeight()/2);
-        drawCircle(canvas); //画表盘外圆
-        drawScale(canvas);
+        drawCircle(canvas); //绘制表盘外圆
+        drawScale(canvas);  //绘制刻度与数字
+        drawPointer(canvas); //绘制指针
 
         canvas.restore();
+
+        //每秒刷新一次
+        postInvalidateDelayed(1000);
     }
 
     //绘制表盘外圆
@@ -183,5 +192,48 @@ public class CustomClock extends View {
             canvas.rotate(6);
         }
         canvas.restore();
+    }
+
+    //绘制指针
+    public void drawPointer(Canvas canvas) {
+
+        //获得当前时间：时、分、秒
+        Calendar calendar = Calendar.getInstance();
+        int hour = calendar.get(Calendar.HOUR_OF_DAY);
+        int minute = calendar.get(Calendar.MINUTE);
+        int second = calendar.get(Calendar.SECOND);
+        //计算时分秒指针转过的角度
+        int angleHour = (hour%12*360 + minute*360/60)/12;
+        int angleMinute = (minute*360 + second*360/60)/60;
+        int angleSecond = second*360/60;
+        //绘制时针
+        canvas.save();
+        canvas.rotate(angleHour);
+        RectF rectFHour = new RectF(-mHourPointWidth/2, -mRadius*3/5, mHourPointWidth/2, mPointEndLength);
+        mPaint.setColor(mHourPointColor);
+        mPaint.setStyle(Paint.Style.FILL);
+        canvas.drawRoundRect(rectFHour, mPointRadius, mPointRadius, mPaint);
+        canvas.restore();
+        //绘制分针
+        canvas.save();
+        canvas.rotate(angleMinute);
+        RectF rectFMinute = new RectF(-mMinutePointWidth/2, -mRadius*3.5f/5, mMinutePointWidth/2, mPointEndLength);
+        mPaint.setColor(mMinutePointColor);
+        mPaint.setStyle(Paint.Style.FILL);
+        canvas.drawRoundRect(rectFMinute, mPointRadius, mPointRadius, mPaint);
+        canvas.restore();
+        //绘制秒针
+        canvas.save();
+        canvas.rotate(angleSecond);
+        RectF rectFSecond = new RectF(-mSecondPointWidth/2, -mRadius + 15, mSecondPointWidth/2, mPointEndLength);
+        mPaint.setColor(mSecondPointColor);
+        mPaint.setStyle(Paint.Style.FILL);
+        canvas.drawRoundRect(rectFSecond, mPointRadius, mPointRadius, mPaint);
+        canvas.restore();
+
+        //绘制中心圆点
+        mPaint.setColor(mSecondPointColor);
+        mPaint.setStyle(Paint.Style.FILL);
+        canvas.drawCircle(0,0, mSecondPointWidth*2, mPaint);
     }
 }
